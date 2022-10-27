@@ -94,7 +94,7 @@ class TestManager(object):
             for test in self.tests:
                 if self.should_run_test(test, test_names):
                     if print_only:
-                        print test.id()
+                        print(test.id())
                     else:
                         suite.addTest(test)
 

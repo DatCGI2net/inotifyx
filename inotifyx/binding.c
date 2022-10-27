@@ -45,6 +45,16 @@
 #define EVENT_SIZE (sizeof (struct inotify_event))
 #define BUF_LEN (1024 * (EVENT_SIZE + 16))
 
+struct module_state {
+    PyObject *error;
+};
+
+#if PY_MAJOR_VERSION >= 3
+#define GETSTATE(m) ((struct module_state*)PyModule_GetState(m))
+#else
+#define GETSTATE(m) (&_state)
+static struct module_state _state;
+#endif
 
 static PyObject * inotifyx_init(PyObject *self, PyObject *args) {
     int fd;
@@ -271,7 +281,46 @@ static PyMethodDef InotifyMethods[] = {
 };
 
 
-PyMODINIT_FUNC initbinding(void) {
+#if PY_MAJOR_VERSION >= 3
+
+static int myextension_traverse(PyObject *m, visitproc visit, void *arg) {
+    Py_VISIT(GETSTATE(m)->error);
+    return 0;
+}
+
+static int myextension_clear(PyObject *m) {
+    Py_CLEAR(GETSTATE(m)->error);
+    return 0;
+}
+
+
+static struct PyModuleDef moduledef = {
+        PyModuleDef_HEAD_INIT,
+        "inotifyx.binding",
+        NULL,
+        sizeof(struct module_state),
+        InotifyMethods,
+        NULL,
+        myextension_traverse,
+        myextension_clear,
+        NULL
+};
+
+#define INITERROR return NULL
+
+PyMODINIT_FUNC PyInit_binding(void)
+#else
+#define INITERROR return
+
+PyMODINIT_FUNC initbinding(void)
+#endif
+
+{
+#if PY_MAJOR_VERSION >= 3
+    PyObject *module = PyModule_Create(&moduledef);
+#else
+    //PyObject *module = Py_InitModule("myextension", myextension_methods);
+
     PyObject* module = Py_InitModule3(
       "inotifyx.binding",
       InotifyMethods,
@@ -283,6 +332,8 @@ PyMODINIT_FUNC initbinding(void) {
 
     if (module == NULL)
         return;
+#endif
+
     
     PyModule_AddIntConstant(module, "IN_ACCESS", IN_ACCESS);
     PyModule_AddIntConstant(module, "IN_MODIFY", IN_MODIFY);
@@ -307,4 +358,7 @@ PyMODINIT_FUNC initbinding(void) {
     PyModule_AddIntConstant(module, "IN_ISDIR", IN_ISDIR);
     PyModule_AddIntConstant(module, "IN_ONESHOT", IN_ONESHOT);
     PyModule_AddIntConstant(module, "IN_ALL_EVENTS", IN_ALL_EVENTS);
+#if PY_MAJOR_VERSION >= 3
+    return module;
+#endif
 }
